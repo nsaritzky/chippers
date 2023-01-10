@@ -14,7 +14,8 @@
         pkgs = import nixpkgs { inherit system overlays; };
       in with pkgs; {
         devShells.default = mkShell {
-          buildInputs = [ rust-bin.beta.latest.default ];
+          buildInputs =
+            [ rust-bin.beta.latest.default pkgs.SDL2 pkgs.SDL2_gfx ];
 
           nativeBuildInputs = [ python311 ];
 
