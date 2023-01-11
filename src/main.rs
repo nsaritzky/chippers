@@ -72,10 +72,10 @@ impl Emulator {
         let ((_a, b), (c, d)) = (x.split_at(4), y.split_at(4));
         // let u = (a & 0b11110000) >> 4;
         match nibbles[0] {
-            0x0 => match b.load::<u8>() {
+            0x0 => match instruction[4..].load_be::<u16>() {
                 0xEE => {
                     *self.program_counter.borrow_mut() =
-                        self.stack.pop().expect("tried to pop from an empty stack") as usize
+                        usize::from(self.stack.pop().expect("tried to pop from an empty stack"))
                 }
                 0xE0 => self.clear_screen(),
                 _ => {}
@@ -129,19 +129,32 @@ impl Emulator {
                     }
                     5 => {
                         self.registers[0xF] = 1;
-                        if x > y {
+                        if x < y {
                             self.registers[0xF] = 0;
                         };
                         x.wrapping_sub(y)
                     }
+                    6 => {
+                        self.registers[0xF] = if x.view_bits::<Msb0>()[7] { 1 } else { 0 };
+                        x >> 1
+                    }
                     7 => {
                         self.registers[0xF] = 1;
-                        if y > x {
+                        if y < x {
                             self.registers[0xF] = 0
                         };
                         y.wrapping_sub(x)
                     }
-                    _ => return Err(format!("invalid opcode {:x?}", instruction)),
+                    0xe => {
+                        self.registers[0xF] = if x.view_bits::<Msb0>()[0] { 1 } else { 0 };
+                        x << 1
+                    }
+                    _ => {
+                        return Err(format!(
+                            "invalid opcode {:x?}",
+                            instruction.load_be::<u16>()
+                        ))
+                    }
                 }
             }
             0x9 => {
@@ -173,7 +186,42 @@ impl Emulator {
                 }
                 // println!("display buffer dump: {:x?}", &self.display_buffer.borrow())
             }
-            _ => return Err(format!("invalid opcode {:x?}", instruction)),
+            0xF => match instruction[8..].load_be::<u8>() {
+                0x29 => {
+                    self.index = 0x50 + u16::from(self.registers[b.load_be::<usize>()]);
+                }
+                0x33 => {
+                    let n = self.registers[b.load_be::<usize>()];
+                    let hundreds = n / 100;
+                    let tens = (n % 100) / 10;
+                    let ones = n % 10;
+                    self.memory[usize::from(self.index)] = hundreds;
+                    self.memory[usize::from(self.index) + 1] = tens;
+                    self.memory[usize::from(self.index) + 2] = ones;
+                }
+                0x55 => {
+                    for i in 0..b.load_be::<usize>() + 1 {
+                        self.memory[usize::from(self.index) + i] = self.registers[i];
+                    }
+                }
+                0x65 => {
+                    for i in 0..b.load_be::<usize>() + 1 {
+                        self.registers[i] = self.memory[usize::from(self.index) + i];
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "invalid opcode {:x?}",
+                        instruction.load_be::<u16>()
+                    ))
+                }
+            },
+            _ => {
+                return Err(format!(
+                    "invalid opcode {:x?}",
+                    instruction.load_be::<u16>()
+                ))
+            }
         }
         Ok(())
     }
@@ -188,8 +236,10 @@ impl Emulator {
     }
 
     fn jump_subroutine(&mut self, n: u16) {
+        println!("program counter: {:x?}", self.program_counter.borrow());
         self.stack
             .push(u16::try_from(*self.program_counter.borrow()).unwrap());
+        println!("jumping to {:x?} from {:x?}", n, self.stack.last().unwrap());
         *self.program_counter.borrow_mut() = usize::from(n);
     }
 
