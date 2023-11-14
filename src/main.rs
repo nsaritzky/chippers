@@ -1,12 +1,12 @@
 mod font;
 mod keyboard;
+mod render;
 
 use bitvec::prelude::*;
 use rand::prelude::*;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::surface::Surface;
 use std::cell::RefCell;
 use std::cmp::min;
 use std::collections::HashSet;
@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use crate::font::FONT;
 use crate::keyboard::hex_keypad;
+use crate::render as my_render;
 
 const _PIXEL_OFF_COLOR: Color = Color::BLACK;
 const _PIXEL_ON_COLOR: Color = Color::WHITE;
@@ -24,7 +25,7 @@ const DISPLAY_SCALE: u32 = 10;
 const EXEC_SPEED: u32 = 700;
 
 #[derive(PartialEq, Debug)]
-struct Emulator {
+pub struct Emulator {
     display_buffer: RefCell<Vec<u8>>,
     display_flag: bool,
     memory: Vec<u8>,
@@ -381,24 +382,7 @@ pub fn main() -> Result<(), String> {
         emulator.decode(instruction)?;
 
         if emulator.display_flag {
-            let mut window_surface = window.surface(&event_pump)?;
-            // window_surface.set_palette(&palette)?;
-
-            let mut expanded_buf = emulator.display_buffer.borrow_mut();
-
-            let surface = Surface::from_data(
-                &mut expanded_buf,
-                DISPLAY_WIDTH.into(),
-                DISPLAY_HEIGHT.into(),
-                DISPLAY_WIDTH / 8,
-                sdl2::pixels::PixelFormatEnum::Index1MSB,
-            )?;
-
-            // The rest of the game loop goes here...
-
-            let converted = surface.convert(&pixel_format)?;
-            converted.blit_scaled(None, &mut window_surface, None)?;
-            window_surface.finish()?;
+            my_render::render(&window, &event_pump, &emulator, &pixel_format)?;
         }
         emulator.display_flag = false;
 
